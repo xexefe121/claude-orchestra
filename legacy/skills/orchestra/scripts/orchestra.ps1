@@ -1058,15 +1058,18 @@ function Invoke-WorkerRunCore([string]$RunTask, [string]$RunModel, [string]$RunE
         $reportBefore = $null
         if ([IO.File]::Exists($report)) { $reportBefore = [IO.File]::GetLastWriteTimeUtc($report) }
         $setting = 'model_reasoning_effort="' + $run.Effort + '"'
+        # Usage guards: standard tier (Fast tier bills about 2.5x), capped tool output, earlier compaction.
+        $usageGuards = @('-c', 'service_tier="default"', '-c', 'tool_output_token_limit=8000', '-c', 'model_auto_compact_token_limit=200000')
         if ($RunResume) {
             $prompt = "You are still GPT worker $($run.Name). New brief: .orchestra/tasks/$($run.Task).md. Re-read .orchestra/context.md if it changed. Same rules. Report to .orchestra/reports/$($run.Task).md."
-            $arguments = @('exec', 'resume', $run.SessionId, '--json', '-m', $run.Model, '-c', $setting,
-                '--dangerously-bypass-approvals-and-sandbox', '--skip-git-repo-check', '-o', $last, '-')
+            $arguments = @('exec', 'resume', $run.SessionId, '--json', '-m', $run.Model, '-c', $setting) + $usageGuards +
+                @('--dangerously-bypass-approvals-and-sandbox', '--skip-git-repo-check', '-o', $last, '-')
         } else {
             $prompt = "You are GPT worker $($run.Name) (model $($run.Model), effort $($run.Effort)). Before anything else read .orchestra/WORKER.md (your rules), .orchestra/context.md (project context), then your brief .orchestra/tasks/$($run.Task).md. Do the task. When finished, write your report to .orchestra/reports/$($run.Task).md in the format WORKER.md specifies. Your final message: one line status, then the report path."
-            $arguments = @('exec', '--json', '-m', $run.Model, '-c', $setting, '-s', 'danger-full-access',
+            $arguments = @('exec', '--json', '-m', $run.Model, '-c', $setting) + $usageGuards + @('-s', 'danger-full-access',
                 '--skip-git-repo-check', '-C', $Project, '-o', $last, '-')
         }
+        $prompt += "`nKeep tool output small: never print whole large files or logs. Read line ranges, filter with a search, or pipe through a first/last-N filter; send long command output to a file and read only the part you need."
         if ($run.Engine -eq 'codex' -and $env:OS -eq 'Windows_NT') {
             $prompt += "`nShell is Windows PowerShell 5.1: no && or ||. Write scripts longer than 3 lines to a .py/.ps1 file and run the file; no inline here-strings. rg/findstr exit 1 means no match, not an error. Do not use wsl."
         }

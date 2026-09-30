@@ -1,16 +1,36 @@
-# Computer use through GPT workers
+# Computer use through Codex workers
 
-Headless `codex exec` workers can use native desktop control when the native MCP service is configured. Dated CLI observations are in `docs/HOW-IT-WORKS.md` in the repository.
+Headless `codex exec` workers can control the real desktop when the native
+MCP service is configured. Use codex-run with `-ComputerUse`.
 
-- The native path is the `node_repl` MCP server from `~/.codex/config.toml`: tool `mcp__node_repl__js`, with `const {sky} = await import('@oai/sky')` and then `sky.list_windows()` and the rest of the Sky API.
-- The trap: the unified plugin also exposes `cua_repl`, which is **browser-only**. Workers that pick it report "native APIs disabled" and `apps: []`. The launcher's `-ComputerUse` prompt tells workers to use `mcp__node_repl__js` and to preflight with `sky.list_windows()`.
-- It needs the Codex desktop app running, because the app hosts the native computer-use pipe. The launcher checks this before starting.
-- Only one GUI worker runs at a time. The launcher holds a machine-wide mutex for `-ComputerUse` runs, since two workers moving the same mouse collide. Parallel native requests also fail with "Computer Use helper already has an active request".
-- Dispatch with `run -Model sol -Effort high -ComputerUse`.
-- Briefs for GUI work must name:
-  - the app;
-  - the exact goal;
-  - what not to touch;
-  - an end-state screenshot as proof, saved to `.orchestra/reports/<task id>/`.
-- The safety rules still apply: no credentials, no purchases, no sending messages, and no destructive actions unless the user approved that specific action in chat. Avoid GUI tasks while the user is actively working unless they agreed.
-- Running a task *inside* the Codex app's GUI is not scriptable today: `codex://threads/new` links only prefill the composer, and no supported API injects turns into the running app. Headless native control is the supported route.
+- Native control comes from the `node_repl` MCP server in `~/.codex/config.toml`:
+  tool `mcp__node_repl__js`, import `const {sky} = await import('@oai/sky')`,
+  then call `sky.list_windows()` before using the rest of the Sky API.
+- The unified plugin's `cua_repl` is browser-only. It can report "native APIs
+  disabled" and `apps: []`. The codex-run `-ComputerUse` prompt names the native
+  tool and requires the Sky preflight. If unavailable, stop with
+  `BLOCKED: native CUA unavailable`; do not substitute browser control.
+- The Codex desktop app hosts the native control pipe and must be running.
+  The Windows runner checks this before starting.
+- Only one GUI run may control the desktop at a time. The Windows runner holds
+  a machine-wide mutex throughout `-ComputerUse` runs. Parallel native requests
+  can fail with "Computer Use helper already has an active request".
+- Dispatch in the background, for example:
+
+```powershell
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File "$env:USERPROFILE\.claude\skills\orchestra\scripts\codex-run.ps1" -Project . -PromptFile "$env:TEMP\desktop-task.txt" -Effort high -ComputerUse
+```
+
+Give each run one goal. The prompt must name the app, exact end state, what
+not to touch, and where to save the end-state screenshot. Require that screenshot
+path in the final message. No briefs or report templates are needed.
+
+Workers have full disk access and no approval prompts. Prompt rules are not
+isolation. Do not handle credentials, make purchases, send messages, or perform
+destructive actions unless the user approved that specific action in chat.
+Avoid GUI work while the user is using the desktop unless they agreed.
+Use a separate account or VM for stronger limits.
+
+Running a task inside the Codex app's GUI has no supported turn-injection API;
+`codex://threads/new` only prefills the composer. Use headless native control.
+Live runs and computer use on macOS are not yet verified by the author.

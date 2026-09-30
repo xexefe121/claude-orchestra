@@ -18,7 +18,7 @@ function Show-Prerequisite([string]$Name, [bool]$Found, [string]$Fix, [string]$D
 
 try {
     $sourceRoot = $PSScriptRoot
-    if (-not $sourceRoot -or -not (Test-Path -LiteralPath (Join-Path $sourceRoot 'skills/orchestra/scripts/orchestra.ps1'))) {
+    if (-not $sourceRoot -or -not (Test-Path -LiteralPath (Join-Path $sourceRoot 'skills/orchestra/scripts/codex-run.ps1'))) {
         $downloadRoot = Join-Path ([IO.Path]::GetTempPath()) ('orchestra-install-' + [guid]::NewGuid().ToString('N'))
         [void][IO.Directory]::CreateDirectory($downloadRoot)
         $archive = Join-Path $downloadRoot 'main.zip'
@@ -31,18 +31,19 @@ try {
         Expand-Archive -LiteralPath $archive -DestinationPath $downloadRoot
         $sourceRoot = Join-Path $downloadRoot 'claude-orchestra-main'
     }
-    foreach ($required in @('skills/orchestra/scripts/orchestra.ps1', 'skills/orchestra-claude/SKILL.md', 'docs/AGENTS-snippet.md')) {
+    foreach ($required in @('skills/orchestra/SKILL.md', 'skills/orchestra/computer-use.md', 'skills/orchestra/scripts/codex-run.ps1', 'docs/AGENTS-snippet.md')) {
         if (-not (Test-Path -LiteralPath (Join-Path $sourceRoot $required))) { throw "Package file missing: $required" }
     }
     $claudeRoot = Join-Path $env:USERPROFILE '.claude'
     $skillsRoot = Join-Path $claudeRoot 'skills'
     [void][IO.Directory]::CreateDirectory($skillsRoot)
-    foreach ($name in @('orchestra', 'orchestra-claude')) {
-        $destination = Join-Path $skillsRoot $name
-        Backup-Skill $destination
-        Copy-Item -LiteralPath (Join-Path $sourceRoot "skills/$name") -Destination $destination -Recurse
-        Write-Output "Installed: $destination"
+    $destination = Join-Path $skillsRoot 'orchestra'
+    Backup-Skill $destination
+    [void][IO.Directory]::CreateDirectory((Join-Path $destination 'scripts'))
+    foreach ($relative in @('SKILL.md', 'computer-use.md', 'scripts/codex-run.ps1')) {
+        Copy-Item -LiteralPath (Join-Path $sourceRoot "skills/orchestra/$relative") -Destination (Join-Path $destination $relative)
     }
+    Write-Output "Installed: $destination"
     if ($AddAgentsRule) {
         $rulePath = Join-Path $claudeRoot 'AGENTS.md'
         $claudePath = Join-Path $claudeRoot 'CLAUDE.md'
@@ -66,13 +67,13 @@ try {
     }
     Write-Output 'Prerequisites (nothing is installed automatically):'
     $claudeCommand = Get-Command claude -ErrorAction SilentlyContinue
-    Show-Prerequisite 'Claude CLI (optional for Claude workers)' ([bool]$claudeCommand) 'irm https://claude.ai/install.ps1 | iex'
+    Show-Prerequisite 'Claude Code CLI (or use Claude Code desktop)' ([bool]$claudeCommand) 'irm https://claude.ai/install.ps1 | iex'
     $loggedIn = $false
     if ($claudeCommand) {
         try { $global:LASTEXITCODE = 1; $null = & $claudeCommand.Source auth status 2>&1; $loggedIn = ($LASTEXITCODE -eq 0) }
         catch { $loggedIn = $false }
     }
-    Show-Prerequisite 'Claude CLI login (optional for Claude workers)' $loggedIn 'claude auth login'
+    Show-Prerequisite 'Claude CLI login (if using CLI)' $loggedIn 'claude auth login'
     $codexCommand = Get-Command codex -ErrorAction SilentlyContinue
     $codexVersion = ''
     if ($codexCommand) {
@@ -92,7 +93,7 @@ try {
     }
     Show-Prerequisite 'Codex desktop app (optional for computer use)' $desktopFound 'Start-Process https://chatgpt.com/codex; install and open the Windows desktop app'
     foreach ($name in @('node', 'npx')) {
-        Show-Prerequisite "$name (optional for Playwright profile)" ([bool](Get-Command $name -ErrorAction SilentlyContinue)) 'winget install OpenJS.NodeJS.LTS; reopen PowerShell'
+        Show-Prerequisite "$name (for npm Codex installation and browser tools)" ([bool](Get-Command $name -ErrorAction SilentlyContinue)) 'winget install OpenJS.NodeJS.LTS; reopen PowerShell'
     }
     Write-Output 'Computer use also needs the native node_repl/Sky service configured; see skills/orchestra/computer-use.md.'
 } finally {
@@ -105,4 +106,3 @@ try {
     }
 }
 Write-Output 'Usage: /orchestra <project> <goal>'
-Write-Output 'Usage: /orchestra-claude <project> <goal>'

@@ -1,18 +1,20 @@
 <!-- orchestra:start -->
 # Orchestrator mode
 
-Orchestra is never the default. Load an orchestra skill ONLY when the user, in the current chat, does one of these:
-- types `/orchestra` or `/orchestra-claude`;
-- asks in words to use orchestra, GPT/Codex workers, or to "dispatch" work;
-- says "takeover" or "handover".
+Load the one skill, `/orchestra` (`~/.claude/skills/orchestra`), only when
+the user explicitly activates it in the current chat: `/orchestra`, a request
+to use orchestra or GPT/Codex workers or dispatch work, "takeover", or "handover".
+It stays active for that chat until the user says to stop.
 
-These are NOT triggers: an existing `.orchestra/` folder, a `Mode:` line in `context.md`, a memory note saying a project used orchestra, or a plain "go ahead" / "continue" in a chat where orchestra was not already invoked. Without a trigger, do the work normally in the chat. If orchestra looks like a good fit, offer it in one line and wait.
+An existing `.orchestra/` folder, old project state, a memory note, or a plain
+"go ahead" or "continue" is not activation. Without a trigger, work normally.
 
-Once invoked, it stays on for that chat until the user says to stop.
-
-`/orchestra` (`~/.claude/skills/orchestra`): Claude plans and reviews while Codex GPT workers do the labor.
-
-`/orchestra-claude` (`~/.claude/skills/orchestra-claude`): hybrid mode. Opus 5.5 decides; Sonnet 5.5 does tasteful and frontend work; gpt-6.1-sol does grunt work; astra and then Fable handle escalations. On "takeover", pick this skill when the project's `.orchestra/context.md` says `Mode: orchestra-claude`.
+Opus decides, writes prompts, reviews, and does small work inline.
+`gpt-6.1-sol` does large bounded work and all computer use through codex-run.
+Sonnet does frontend, visual polish, UI copy, and location searches as a native
+background subagent. Opus is the only routine reviewer.
+Use `gpt-6-astra` or Fable only after Opus names a concrete blocker it cannot
+resolve. Ask astra first; use Fable to check astra or when astra fails.
 <!-- orchestra:end -->
 
 <!-- Optional: append the following block only if wanted. The installer adds only the orchestra block above. -->

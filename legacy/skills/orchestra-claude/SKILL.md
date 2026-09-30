@@ -24,8 +24,8 @@ This file only overrides **routing** and **escalation**, and adds the Claude eng
 | Moderate, well-specified coding | Sonnet | `sonnet` | medium |
 | Token-heavy grunt work: bulk edits, large refactors, test writing, migrations, log and data crunching, scouting big codebases | gpt-6.1-sol | `sol` | high |
 | Computer use | gpt-6.1-sol | `sol -ComputerUse` | high |
-| 3D and frontier work | gpt-6-astra | `astra` | high |
-| Task reviews (`-Review`) | gpt-6-astra | default | high |
+| 3D work | gpt-6.1-sol | `sol` | high |
+| Routine review | Opus (this session), from digest and targeted diff | none | none |
 | Classification, triage, labeling, quick checks | gpt-6-luna or gpt-5.6-luna | `luna` / `luna56` | low or medium |
 
 **Frontend is Sonnet 5.5 only.** In this mode, every task that touches UI goes to `sonnet` and never to sol or astra:
@@ -57,7 +57,7 @@ Opus picks each Sonnet task's effort (`high` or `medium`) when writing the brief
 ## Escalation ladder (replaces orchestra's)
 
 1. Worker FAILED or BLOCKED: fix the brief and resume once.
-2. Fails again: fresh worker one tier up (sol to Sonnet high for judgment problems, or to astra high for hard or 3D problems).
+2. Fails again: fresh worker, sol to Sonnet high for judgment problems. Astra and Fable are not daily workers or routine reviewers; they come in only at the next steps, when the task is stuck.
 3. Opus stuck, needs clarification, or wants a second opinion: `astra` consult (`templates/consult.md`) at `xhigh`. Use `ultra` or `max` for deep problems.
 4. Still stuck on a very, very hard problem after astra: `fable` consult with the same consult template, plus the astra consult report under Context. Within an authorized orchestration task, this escalation needs no separate confirmation.
 5. The decision is the user's (taste, scope, money, risk), or Fable did not resolve it: ask the user.

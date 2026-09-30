@@ -1,43 +1,50 @@
 # How it works
 
-Claude is the orchestrator. It writes briefs, chooses models, reviews results, and decides what happens next. The PowerShell launcher starts headless Codex or Claude workers and records their state in the project.
+One skill tells Opus when to work inline and when to delegate.
+One small runner starts each large bounded Codex task. No workflow files,
+task board, brief/report templates, or review chains are required.
+The skill and runner are the source of truth.
 
-## State files
+## Five steps
 
-| Path | Owner | Purpose |
-|---|---|---|
-| `.orchestra/context.md` | Orchestrator | Goal, architecture, decisions, readiness checklist |
-| `.orchestra/progress.md` | Orchestrator | Handoff and milestones |
-| `.orchestra/WORKER.md` | Orchestrator | Worker rules |
-| `.orchestra/tasks/*.md` | Orchestrator | Briefs and owned files |
-| `.orchestra/reports/*.md` | Worker | Result, verification, risks, handoff notes |
-| `.orchestra/workers.json` | Launcher | Worker identity, session, status, CLI, context |
-| `.orchestra/runs.json` | Launcher | Latest task results across worker resumes |
-| `.orchestra/board.md` | Launcher | Task board derived from state |
-| `.orchestra/runs/` | Launcher | Raw JSONL and stderr logs; gitignored |
+1. **Inline or delegate:** Opus handles small work and defects it can locate.
+   sol handles large bounded work and computer use; Sonnet handles frontend
+   as a native background subagent. Every delegation needs acceptance evidence.
+2. **Dispatch:** write a 200 to 400 word scratch prompt: Outcome, Where,
+   Constraints, Acceptance. Pass it to codex-run in the background.
+   Keep working in disjoint files; at most two writers. Wait for notification,
+   not polling. Default model is `gpt-6.1-sol`, effort `medium`, timeout 20 minutes.
+3. **Review:** Opus checks acceptance results and relevant diff hunks.
+   UI work needs a screenshot. No routine model reviewers.
+4. **When the result is wrong:** Opus fixes clear defects inline. Resume once
+   only for a large fix. A second failure returns to Opus to rescope or escalate.
+5. **Handoff:** near 200k chat context, write `.orchestra/handoff.md`, at most
+   40 lines. Record goal, readiness, done/running work, run/thread IDs,
+   decisions, next action, and backlog. Continue in a new chat with "takeover".
 
-`init` copies templates. `run` checks model/CLI support, starts a worker, captures output, and writes state. A task counts as done only when exit code is zero and its report was written during that run. `-Review` chains a fresh reviewer. The launcher prints completion lines and bounded report digests. `status` lists workers; `board` regenerates the task board. A named worker can resume for related work below its handoff threshold.
+## Runner and state
 
-`batch` reads a JSON array, starts independent tasks in parallel, waits for jobs, and respects `dependsOn`. Failed dependencies skip their dependents. Per-project mutexes protect state writes. A machine-wide desktop mutex allows one computer-use worker at a time. Process jobs and timeouts bound hung workers and inherited output pipes.
+Windows uses `scripts/codex-run.ps1`; macOS/Linux use `scripts/codex-run.py`.
+The runner starts `codex exec`, forces standard service tier, limits tool
+output, and adds shell and git rules. It captures output and enforces a timeout.
+Windows uses a job object to stop the worker and descendants together.
+Output is a status/token summary followed by a bounded final message.
+Run artifacts live in `.orchestra/runs/`: metadata `.json`, events `.jsonl`,
+stderr `.err.log`, and final message `.last.md`. They are diagnostics, not
+workflow files. The runner creates `.orchestra/.gitignore` when absent.
 
-## Task loop and escalation
+`/orchestra`, explicit dispatch requests, "takeover", or "handover" activate
+the skill in the current chat. Old folders and memory notes do not activate it.
+Opus is the only reviewer. Astra then Fable are for named blockers only.
 
-The orchestrator defines readiness, divides work into independent owned-file briefs, and dispatches one batch per wave in the background. Completion notifications replace polling. It reads the digest, consults a report only when needed, accepts results, and dispatches the next wave. Only the orchestrator commits.
+## Computer use and limits
 
-Fix an unclear brief and resume once after a failure. After a second failure, escalate to astra; use a stronger effort or consult for hard decisions. Fable is the final model escalation. In hybrid mode, Sonnet handles frontend and judgment-sensitive coding, while sol handles large mechanical non-UI work. Ask the user when the remaining decision belongs to them.
+`-ComputerUse` requires the Codex desktop app and native `node_repl`/Sky tool.
+Windows checks the app and holds one machine-wide GUI lock. The worker must
+preflight native control and return an end-state screenshot path.
+See [computer-use.md](../skills/orchestra/computer-use.md).
 
-GPT handoff threshold is 70% of context. Claude worker threshold is 200k tokens or 70%, whichever comes first. The orchestrator hands over at 200k context. Handover records state, running workers, decisions, exact next action, and gotchas in `progress.md`. Takeover reads that handoff, then context, worker status, and relevant fresh reports. Workers continue independently while the orchestrator changes chats.
-
-## Known environment notes (2026-09-30)
-
-These are dated observations from the kit's validation environment, not requirements for every PC.
-
-- PATH/npm Codex CLI 0.159.2 supported `gpt-6.1-sol`; the bundled desktop CLI 0.158.0-alpha did not. Both supported `gpt-6-sol`, `gpt-6-astra`, and `gpt-6-luna`.
-- Native control was verified through `mcp__node_repl__js` with `@oai/sky` on both CLI families when the desktop app was running and the native service was configured. `cua_repl` in that environment exposed only browser control. CLI family alone does not guarantee native control.
-- Current `auto` selection prefers a supported PATH/npm CLI for ordinary work and a supported desktop CLI for computer use. It falls back to the other supported family and preserves CLI provenance for resumes.
-- Claude model shorthands were pinned to Sonnet 5.5, Opus 5.5, and Fable 5.1. The launcher accepts full IDs. Update pins when models change.
-- Windows PowerShell 5.1 reads scripts without a BOM as ANSI by default. Package scripts use ASCII-compatible source and UTF-8 APIs for data. Non-ASCII task inputs get a BOM before CLI consumption when needed.
-
-## Local verification
-
-`tests/run.ps1` runs the latest mock regression suites in separate PowerShell 5.1 child processes. It supplies a fake home and fresh temp fixtures, protecting installed skills and CLI configuration. Suites cover model selection, Claude engine parsing, profiles, reviews, context guards, boards, batch timeouts, process drainage, install, and uninstall. No live-model harness is included.
+Workers run with full disk access and no approval prompts. Prompt rules are
+not isolation; GUI workers control the real desktop. Use a separate account
+or VM for stronger limits. macOS/Linux are verified by mock tests in CI only;
+live runs and computer use on macOS are not yet verified by the author.

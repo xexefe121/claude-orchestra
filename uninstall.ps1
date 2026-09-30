@@ -2,6 +2,8 @@ $ErrorActionPreference = 'Stop'
 $utf8 = New-Object System.Text.UTF8Encoding($false)
 $claudeRoot = Join-Path $env:USERPROFILE '.claude'
 $skillsRoot = Join-Path $claudeRoot 'skills'
+# Remove the current skill and any installed copy of the retired second skill.
+# Moving each folder preserves a backup for recovery.
 foreach ($name in @('orchestra', 'orchestra-claude')) {
     $path = Join-Path $skillsRoot $name
     if (Test-Path -LiteralPath $path) {

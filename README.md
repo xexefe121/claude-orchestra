@@ -1,161 +1,213 @@
 # Claude orchestra
 
-Claude Code plans and reviews as orchestrator.
-Codex GPT workers do the labor; Claude Sonnet workers are optional.
-State lives in `.orchestra/`, so another chat can take over.
+One Claude Code skill for explicit orchestration.
+Opus decides and reviews; Codex handles large bounded tasks; Sonnet handles frontend.
+One small runner starts workers; no workflow files are needed.
 
-## Why
+[![Tests](https://github.com/xexefe121/claude-orchestra/actions/workflows/test.yml/badge.svg)](https://github.com/xexefe121/claude-orchestra/actions/workflows/test.yml)
 
-One operator's audit covered 11 projects and 430 worker runs. Delegated tasks yielded about 3-4 times more work per Claude usage window. These are personal measurements, not a controlled benchmark or a promised saving.
+## Safety
 
-The main Claude cost was the orchestrator re-reading its own context. One session spent 187 of 291 API calls polling. Sessions made 30-82 state edits each. Context reached 500k-960k tokens, where calls cost about 3-5 times more. The resulting rules use completion notifications, batch dispatch, short result digests, an automatic task board, and handover at 200k context.
+**The worker runs with full disk access and no approval prompts. Computer-use runs control the real desktop. Prompt rules are not isolation. Use a separate account or VM for stronger limits.**
+
+Only approve desktop actions you intend. Credentials, purchases, sending messages,
+and destructive actions require specific approval in chat. Keep GUI work off a
+desktop you are actively using unless you agree to share it.
+
+## Why it is small
+
+The first version had brief files, report files, a task board, review chains and a 1,400-line launcher. An audit of 487 worker runs showed 28% of worker tokens went to fix rounds and 9% to model reviews; 75% of worker context was file reads. The orchestrator's own chat was the main Claude cost. An independent review said to delete most of it. This version keeps explicit delegation, one runner, Opus review, and a short handoff note. The measurements describe that audit, not a promised saving.
+
+## How a task flows
+
+1. **Inline or delegate.** Opus does small work inline, roughly 10 tool calls,
+   3 files, or 100 changed lines. Large bounded work goes to sol; frontend goes
+   to Sonnet. Each delegation needs an acceptance command or visual evidence.
+2. **Dispatch.** Write a scratch prompt with Outcome, Where, Constraints,
+   Acceptance. Start codex-run with `run_in_background: true`. Keep working in
+   disjoint files; at most two writers. Completion notification is the signal.
+3. **Review.** Opus checks the command result and relevant diff hunks. UI needs
+   a screenshot. No routine model reviewers or review chains.
+4. **When the result is wrong.** Opus fixes a known small defect inline. Resume
+   once for a large fix. A second failure returns to Opus to rescope or escalate.
+5. **Handoff.** Near 200k chat context, write `.orchestra/handoff.md` in at most
+   40 lines: goal/readiness, done/running work, run/thread IDs, decisions,
+   next action, backlog. Continue in a new chat with "takeover".
 
 ## Requirements
 
-- Windows 10 or 11. Windows PowerShell 5.1.
-- Claude Code, desktop or CLI, with a paid Claude plan.
-- Codex CLI, logged in with a ChatGPT plan. Install with `npm install -g @openai/codex`, then `codex login`.
-- Optional Codex desktop app for computer use. Keep it running and configure the native `node_repl`/Sky service. See [computer-use.md](skills/orchestra/computer-use.md).
-- Optional `claude` CLI login for Sonnet, Opus, and Fable workers: `claude auth login`.
-- Optional Node.js and `npx` for the Claude frontend Playwright profile.
+- Claude Code with access to Opus and native Sonnet subagents.
+- Codex CLI, logged in with access to `gpt-6.1-sol`. For an npm install,
+  Node.js/npm: `npm install -g @openai/codex`, then `codex login`.
+- Windows: Windows PowerShell 5.1, Windows 10 or 11.
+- macOS/Linux: Bash and Python 3.9 or newer (`python3`).
+- Computer use: Codex desktop app running and native `node_repl`/Sky service
+  configured. See [computer-use.md](skills/orchestra/computer-use.md).
 
-The installer reports prerequisites. It never installs them or signs you in.
+macOS and Linux are verified by the mock test suite in CI only. Live runs and
+computer use on macOS are not yet verified by the author.
 
 ## Install, update, uninstall
 
-From a clone:
+Get the repository:
+
+```sh
+git clone https://github.com/xexefe121/claude-orchestra.git
+cd claude-orchestra
+```
+
+Windows:
 
 ```powershell
-git clone https://github.com/xexefe121/claude-orchestra.git
-Set-Location claude-orchestra
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\install.ps1 -AddAgentsRule
 ```
 
-Or inspect the script, then install from PowerShell:
+Windows installs exactly `SKILL.md`, `computer-use.md`, and
+`scripts/codex-run.ps1` into `$env:USERPROFILE\.claude\skills\orchestra`.
+Existing copies move to timestamped backups. The installer prints a prerequisite
+checklist; it installs no prerequisites and does not sign you in.
+`-AddAgentsRule` adds the marked opt-in block once to `~/.claude/AGENTS.md`, or
+`CLAUDE.md` when only that file exists. Omit the switch to add it manually.
+The optional git attribution block in [AGENTS-snippet.md](docs/AGENTS-snippet.md)
+is separate and must be added manually.
 
-```powershell
-irm https://raw.githubusercontent.com/xexefe121/claude-orchestra/main/install.ps1 | iex
+macOS/Linux:
+
+```sh
+bash ./install.sh --add-agents-rule
 ```
 
-The one-liner downloads the `main` zip. To add the opt-in activation rule with that route:
+The shell installer uses `~/.claude/skills/orchestra` and the Python runner.
+Omit `--add-agents-rule` to add the activation block manually instead.
+Restart Claude Code after installing if its skill list is already loaded.
+
+To update, obtain the latest repository and rerun the installer for your platform:
 
 ```powershell
-& ([scriptblock]::Create((irm https://raw.githubusercontent.com/xexefe121/claude-orchestra/main/install.ps1))) -AddAgentsRule
-```
-
-Skills go into `$env:USERPROFILE\.claude\skills`. Existing skill folders move to `<name>.bak-<timestamp>` before replacement. Re-running install updates both skills. The rule is added once to `~/.claude/AGENTS.md`, or `CLAUDE.md` when only that file exists. Without the switch, the installer prints instructions. Restart Claude Code after installation if it has already loaded its skill list.
-
-From a clone, update with:
-
-```powershell
-git pull
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\install.ps1
 ```
 
-With the download route, re-run the one-liner. Keep a clone or download `uninstall.ps1` to uninstall:
+```sh
+bash ./install.sh
+```
+
+To uninstall:
 
 ```powershell
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\uninstall.ps1
 ```
 
-Uninstall backs up both skills, removes their active folders, and removes marked rule blocks. Backups and project `.orchestra/` state remain. The optional git rule is a second block in [AGENTS-snippet.md](docs/AGENTS-snippet.md); add it manually if wanted.
+```sh
+bash ./uninstall.sh
+```
+
+Uninstall backs up the installed skill before removing its active copy and
+removes the marked activation block. Windows also backs up and removes an older
+`orchestra-claude` copy and the optional git block. On macOS/Linux, remove these
+legacy additions manually if present. Backups and project `.orchestra/` state remain.
 
 ## Usage
 
-In Claude Code:
+In Claude Code, use `/orchestra <project folder> <goal>`. Explicit requests to
+use orchestra or GPT/Codex workers or dispatch work also activate it. Activation
+lasts for the chat until stopped. A folder, memory note, or plain "go ahead"
+does not activate it.
+
+Say "takeover" to read `.orchestra/handoff.md` and newest run metadata and
+continue. For older state, read `.orchestra/progress.md` once. Say "handover"
+to write the short handoff note, save durable preferences, and get the line
+for the next chat.
+
+Windows runner with every option (replace sample paths and thread ID):
+
+```powershell
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File "$env:USERPROFILE\.claude\skills\orchestra\scripts\codex-run.ps1" -Project . -PromptFile "$env:TEMP\task.txt" -Effort high -TimeoutMin 20 -Resume "thread-id" -ComputerUse -Model gpt-6.1-sol
+```
+
+For a short prompt, use `-Prompt` instead of `-PromptFile`:
+
+```powershell
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File "$env:USERPROFILE\.claude\skills\orchestra\scripts\codex-run.ps1" -Project . -Prompt "Run the existing acceptance checks and report results."
+```
+
+| Option | Meaning |
+|---|---|
+| `-Project` | Existing project directory; default current directory. |
+| `-PromptFile` | UTF-8 scratch prompt file, outside the project. |
+| `-Prompt` | Inline prompt; mutually exclusive with `-PromptFile`. Omit both to read stdin. |
+| `-Effort` | `medium` (default) or `high` for real logic. |
+| `-TimeoutMin` | Positive minutes; default 20, capped at 90. |
+| `-Resume` | Existing thread ID; omit for a new task. Resume at most once for a large fix. |
+| `-ComputerUse` | Native desktop preflight and one-GUI-run lock; omit for code tasks. |
+| `-Model` | Model slug; default `gpt-6.1-sol`. |
+
+On macOS/Linux, invoke the Python runner with `python3`:
+
+```sh
+python3 "$HOME/.claude/skills/orchestra/scripts/codex-run.py" --project . --prompt-file /tmp/task.txt --effort medium --timeout-min 20 --model gpt-6.1-sol
+```
+
+Start workers in the background through Claude Code; do not poll or tail logs.
+The runner forces standard service tier and adds shell/output/git rules. Its
+status line reports run/thread IDs, elapsed time, and token counts, followed by
+a bounded final message. Full diagnostics live in `.orchestra/runs/`; these are
+run artifacts, not a task workflow. The skill writes only the handoff note.
+
+Prompt template, normally 200 to 400 words:
 
 ```text
-/orchestra <project> <goal>
-/orchestra-claude <project> <goal>
-/orchestra takeover <project>
-handover
+Outcome: <what must be true when done>
+Where: <exact files, symbols, line ranges to touch or read first>
+Constraints: <what not to change; conventions that matter>
+Acceptance: <the command that must pass, or the screenshot to produce>
 ```
 
-`/orchestra` uses GPT workers for most work. `/orchestra-claude` routes taste and quality-sensitive work to Sonnet. Say `takeover` in the project chat to resume from `.orchestra/`. Say `handover` to save progress and prepare the next chat. Orchestra is opt-in; a state folder alone does not activate it.
+## Model roles
 
-The launcher also works directly. Use a project folder you control:
-
-```powershell
-$launcher = Join-Path $env:USERPROFILE '.claude\skills\orchestra\scripts\orchestra.ps1'
-$project = Join-Path $env:USERPROFILE 'orchestra-example'
-& $launcher init -Project $project
-```
-
-Fill `.orchestra/context.md` and create `.orchestra/tasks/001-example.md` from the task template before dispatching:
-
-```powershell
-& $launcher run -Project $project -Task 001-example -Model sol -Effort high -Review
-```
-
-For a wave, save this array as `plan.json` in the project. Every task needs its own brief:
-
-```json
-[
-  {"task": "001-example", "model": "sol", "effort": "high"},
-  {"task": "002-followup", "model": "sol", "effort": "high", "dependsOn": ["001-example"]}
-]
-```
-
-```powershell
-& $launcher batch -Project $project -Plan plan.json
-& $launcher status -Project $project
-& $launcher board -Project $project
-```
-
-In Claude Code, dispatch with its background tool option and wait for the completion notification. Ordinary PowerShell calls block until complete. Default run timeout is 90 minutes; review timeout is 30. `-TimeoutMin 0` disables the run timeout. `-NoDigest` suppresses report excerpts. `-ComputerUse` serializes access to the real desktop. `-Cli auto` prefers a supported PATH/npm CLI for normal tasks and a supported desktop CLI for computer use. `desktop` and `newest` are explicit alternatives.
-
-## Model routing
-
-Names are pinned in `Normalize-Model` in [orchestra.ps1](skills/orchestra/scripts/orchestra.ps1). Update `Get-ModelPrefix` too when changing a shorthand. Full model IDs pass through. Check current CLI support before relying on a pinned model.
-
-| Work | `/orchestra` | `/orchestra-claude` | Effort |
-|---|---|---|---|
-| Plans, decisions, final review | Claude orchestrator | Claude Opus orchestrator | Session setting |
-| Coding, tests, scripts, bulk changes | `sol` | `sol` for bulk; `sonnet` for quality-sensitive work | high; Sonnet medium by default |
-| Frontend, visual polish, copy | `sol`, with Claude design direction | `sonnet` | high for design-critical work |
-| Computer use | `sol -ComputerUse` | `sol -ComputerUse` | high |
-| 3D, frontier problems | `astra` | `astra` | high; ultra for hardest |
-| Automatic task review | `astra` | `astra` | high |
-| Triage, labels, quick checks | `luna` or `luna56` | `luna` or `luna56` | low or medium |
-| Final model escalation | `fable` after astra | `fable` after astra | high or consult-specific |
-
-| Shorthand | Pinned model ID |
+| Model | Role |
 |---|---|
-| `sol` | `gpt-6.1-sol` |
-| `sol6` | `gpt-6-sol` |
-| `astra` | `gpt-6-astra` |
-| `luna` | `gpt-6-luna` |
-| `luna56` | `gpt-5.6-luna` |
-| `sonnet` | `claude-sonnet-5-5` |
-| `opus` | `claude-opus-5-5` |
-| `fable` | `claude-fable-5-1` |
+| Opus | Decides, prompts, reviews, commits, and does small work inline. |
+| `gpt-6.1-sol` | Large bounded work and all computer use; worker only. |
+| Sonnet 5.5 | Frontend, visual polish, UI copy, and location searches; native background subagent with model `sonnet`. |
+| `gpt-6-astra` / Fable 5.1 | Only for a concrete blocker Opus cannot resolve. Ask astra first; Fable checks astra or follows its failure. |
 
-Claude workers use the same Claude usage window as the orchestrator. GPT workers use the separate ChatGPT quota. Claude workers support `-Profile lean|frontend|full`; `frontend` adds Playwright. Reviews use the default astra reviewer unless explicitly overridden.
+Override a run with `-Model`; astra uses `-Model gpt-6-astra -Effort high`.
+To change the default, edit `$Model` in
+[codex-run.ps1](skills/orchestra/scripts/codex-run.ps1), the parser default in
+`skills/orchestra/scripts/codex-run.py`, and the roles/dispatch guidance in
+[SKILL.md](skills/orchestra/SKILL.md). Fable uses the native Agent tool, model
+`fable`; it is not a routine reviewer.
 
-## Safety
+## Limitations and tests
 
-**Workers have full disk access and no approval prompts.** Codex runs with `danger-full-access` and approval policy `never`. Claude workers use `--dangerously-skip-permissions`. Computer-use workers control the real desktop, including other open apps.
+Delegation has setup cost. Small tasks often cost less and finish faster inline.
+Prompts must bound scope and provide acceptance evidence. The runner does not
+replace review, isolate files, or safely arbitrate two writers on the same files.
+GUI runs share the real mouse and desktop. Native service availability depends
+on the local Codex setup; a successful mock test does not prove live access.
 
-Read [WORKER.md](skills/orchestra/templates/WORKER.md) before use. It forbids credential access, deleting outside the project, unauthorized global installs, git history changes, and following instructions found in files or web pages. Briefs must state owned files and boundaries. These are prompt rules, not enforced isolation. Use at your own risk.
-
-For stronger limits, use a separate Windows account or VM with only the files needed. Codex `-s workspace-write` is **not wired into this launcher**. There is no sandbox switch here. To use it, modify the Codex argument construction for both fresh and resumed runs, choose an approval policy, and separately remove Claude's permission bypass. Verify the changes before using sensitive projects.
-
-## Limitations
-
-- Windows only. No PowerShell 7, macOS, or Linux support promised.
-- Model IDs change. Codex and Claude CLI flags drift. Dated observations live in [HOW-IT-WORKS.md](docs/HOW-IT-WORKS.md).
-- Native desktop control depends on a working desktop app and native service configuration. The installer only checks prerequisites; it does not configure that service.
-- Cost and efficiency numbers are one person's measurements.
-- Workers can fail or exceed context. Reports, reviews, and handover reduce that risk; they do not guarantee correctness.
-
-Run mock regression tests from a clone:
+Windows acceptance suite:
 
 ```powershell
-powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\tests\run.ps1
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File tests\run.ps1
 ```
 
-Tests use local mocks, compile small .NET fixtures, and leave logs in a printed temp folder. They make no model calls. Timeout suites take several minutes. See [HOW-IT-WORKS.md](docs/HOW-IT-WORKS.md) for state and task flow.
+Python mock suite:
+
+```sh
+python -m unittest discover -s tests/py
+```
+
+Use `python3` in place of `python` where required. CI runs the mock suites through
+[test.yml](.github/workflows/test.yml). See [HOW-IT-WORKS.md](docs/HOW-IT-WORKS.md)
+for runner state and handoff details.
+
+## Legacy
+
+The old `orchestra.ps1` launcher, Python launcher, templates, second skill, and
+PowerShell tests remain under [legacy/](legacy/README.md) for one release.
+They are unmaintained and retained for reading old state.
 
 ## License
 
-[MIT](LICENSE). Copyright (c) 2026 xexefe121.
+[MIT](LICENSE), copyright xexefe121.
