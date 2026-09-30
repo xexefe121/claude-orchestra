@@ -1,0 +1,5 @@
+.orchestra/
+*.bak-*
+.build/
+Thumbs.db
+.DS_Store
