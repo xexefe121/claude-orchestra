@@ -44,8 +44,7 @@ The first version had brief files, report files, a task board, review chains and
 - Computer use: Codex desktop app running and native `node_repl`/Sky service
   configured. See [computer-use.md](skills/orchestra/computer-use.md).
 
-macOS and Linux are verified by the mock test suite in CI only. Live runs and
-computer use on macOS are not yet verified by the author.
+macOS is verified by the mock test suite on a Mac mini M2 (Codemagic, `codemagic.yaml`) and Linux by the same suite under WSL. Live model runs and computer use on macOS are not yet verified by the author.
 
 ## Install, update, uninstall
 
