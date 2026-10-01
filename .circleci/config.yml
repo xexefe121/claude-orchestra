@@ -1,0 +1,48 @@
+version: 2.1
+
+orbs:
+  win: circleci/windows@5.0
+
+jobs:
+  macos:
+    macos:
+      xcode: "16.4.0"
+    resource_class: m4pro.medium
+    steps:
+      - checkout
+      - run: python3 --version
+      - run: python3 -m unittest discover -s tests/py -v
+      - run: bash -n install.sh && bash -n uninstall.sh
+      - run:
+          name: Install into a fake HOME, then uninstall
+          command: |
+            export HOME="$(mktemp -d)"
+            bash ./install.sh --add-agents-rule
+            test -x "$HOME/.claude/skills/orchestra/scripts/codex-run.py"
+            bash ./install.sh --add-agents-rule
+            test "$(grep -c '^<!-- orchestra:start -->' "$HOME/.claude/AGENTS.md")" = 1
+            bash ./uninstall.sh
+            test ! -e "$HOME/.claude/skills/orchestra"
+
+  linux:
+    docker:
+      - image: cimg/python:3.12
+    steps:
+      - checkout
+      - run: python -m unittest discover -s tests/py -v
+
+  windows:
+    executor: win/default
+    steps:
+      - checkout
+      - run:
+          name: Windows PowerShell runner tests
+          shell: powershell.exe
+          command: powershell.exe -NoProfile -ExecutionPolicy Bypass -File tests\run.ps1
+
+workflows:
+  test:
+    jobs:
+      - macos
+      - linux
+      - windows
