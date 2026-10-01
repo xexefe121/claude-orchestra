@@ -34,3 +34,5 @@ Use a separate account or VM for stronger limits.
 Running a task inside the Codex app's GUI has no supported turn-injection API;
 `codex://threads/new` only prefills the composer. Use headless native control.
 Live runs and computer use on macOS are not yet verified by the author.
+
+- **Websites are different.** For work inside a web page, do not use `-ComputerUse`. Tell the worker to use its Chrome browser tool, which can read the page URL. Native desktop control refuses to act in a browser window when it cannot verify the URL (seen 2026-10-01). The Chrome tool path set up a Codemagic build in about 3 minutes.

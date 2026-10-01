@@ -62,7 +62,7 @@ Point at exact files. Workers that must explore read whole files, and file reads
 - Findings beyond the acceptance criteria go to a backlog line in the handoff note, not another round.
 
 ## 6. Computer use
-`-ComputerUse` on a sol run: the runner checks that the Codex desktop app is running, takes a machine-wide lock (one GUI run at a time), and tells the worker which native control tool to use. One goal per run; require the end-state screenshot path in the final message. Details: `computer-use.md`. The safety rules still apply: no credentials, purchases, sending messages, or destructive actions unless the user approved that specific action in chat.
+`-ComputerUse` on a sol run: the runner checks that the Codex desktop app is running, takes a machine-wide lock (one GUI run at a time), and tells the worker which native control tool to use. One goal per run; require the end-state screenshot path in the final message. For web pages, skip `-ComputerUse` and tell the worker to use its Chrome browser tool instead; native control refuses browser windows whose URL it cannot verify. Details: `computer-use.md`. The safety rules still apply: no credentials, purchases, sending messages, or destructive actions unless the user approved that specific action in chat.
 
 ## 7. Working with the user
 - Do not stall. Never end a turn while a dispatched or queued item remains, unless a decision is truly the user's.
