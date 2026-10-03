@@ -13,7 +13,7 @@ The skill and runner are the source of truth.
 2. **Dispatch:** write a 200 to 400 word scratch prompt: Outcome, Where,
    Constraints, Acceptance. Pass it to codex-run in the background.
    Keep working in disjoint files; at most two writers. Wait for notification,
-   not polling. Default model is `gpt-6.1-sol`, effort `medium`, timeout 20 minutes.
+   not polling. Default model is `gpt-6.1-sol`, effort `medium`, no timeout unless `-TimeoutMin` is given.
 3. **Review:** Opus checks acceptance results and relevant diff hunks.
    UI work needs a screenshot. No routine model reviewers.
 4. **When the result is wrong:** Opus fixes clear defects inline. Resume once
@@ -26,7 +26,7 @@ The skill and runner are the source of truth.
 
 Windows uses `scripts/codex-run.ps1`; macOS/Linux use `scripts/codex-run.py`.
 The runner starts `codex exec`, forces standard service tier, limits tool
-output, and adds shell and git rules. It captures output and enforces a timeout.
+output, and adds shell and git rules. It captures output and enforces a deadline only when one is given.
 Windows uses a job object to stop the worker and descendants together.
 Output is a status/token summary followed by a bounded final message.
 Run artifacts live in `.orchestra/runs/`: metadata `.json`, events `.jsonl`,

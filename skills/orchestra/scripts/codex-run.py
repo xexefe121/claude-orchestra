@@ -44,7 +44,7 @@ def desktop_lock(timeout):
     handle = os.fdopen(os.open(str(Path(tempfile.gettempdir()) / "orchestra-desktop.lock"), os.O_RDWR | os.O_CREAT, 0o666), "r+b")
     if os.fstat(handle.fileno()).st_size == 0:
         handle.write(b"\0"); handle.flush()
-    deadline = time.monotonic() + timeout
+    deadline = None if timeout is None else time.monotonic() + timeout
     while True:
         try:
             handle.seek(0)
@@ -56,7 +56,7 @@ def desktop_lock(timeout):
                 fcntl.flock(handle, fcntl.LOCK_EX | fcntl.LOCK_NB)
             return handle  # Close releases the lock; never unlink a shared lock inode.
         except OSError:
-            if time.monotonic() >= deadline:
+            if deadline is not None and time.monotonic() >= deadline:
                 handle.close()
                 raise RuntimeError("Timed out waiting for native CUA desktop lock (another ComputerUse worker is running).")
             time.sleep(0.05)
@@ -132,12 +132,12 @@ def main():
     parser.add_argument("--project", default=os.getcwd()); prompts = parser.add_mutually_exclusive_group()
     prompts.add_argument("--prompt"); prompts.add_argument("--prompt-file")
     parser.add_argument("--effort", choices=("medium", "high"), default="medium")
-    parser.add_argument("--model", default="gpt-6.1-sol"); parser.add_argument("--timeout-min", type=float, default=20)
+    parser.add_argument("--model", default="gpt-6.1-sol"); parser.add_argument("--timeout-min", type=float, default=0)
     parser.add_argument("--resume", default=""); parser.add_argument("--computer-use", action="store_true")
     args = parser.parse_args()
-    if not math.isfinite(args.timeout_min) or args.timeout_min < 0.000001:
-        parser.error("--timeout-min must be at least 0.000001")
-    timeout = min(90, args.timeout_min) * 60; now = lambda: dt.datetime.now(dt.timezone.utc).isoformat()
+    if not math.isfinite(args.timeout_min) or args.timeout_min < 0:
+        parser.error("--timeout-min must be 0 (no timeout) or a positive number of minutes")
+    timeout = args.timeout_min * 60 if args.timeout_min > 0 else None; now = lambda: dt.datetime.now(dt.timezone.utc).isoformat()
     run_id = dt.datetime.now().strftime("%Y%m%d-%H%M%S-") + uuid.uuid4().hex[:4]
     record = dict(id=run_id, status="failed", thread_id=args.resume, model=args.model, effort=args.effort,
                   seconds=0, input_tokens=0, cached_input_tokens=0, output_tokens=0, exit_code=1,
@@ -180,7 +180,7 @@ def main():
         threads.append(threading.Thread(target=feed, args=(proc.stdin, prompt + "\n"), daemon=True))
         for thread in threads: thread.start()
         while proc.poll() is None or any(t.is_alive() for t in threads):
-            if time.monotonic() - started >= timeout:
+            if timeout is not None and time.monotonic() - started >= timeout:
                 record["status"] = "timeout"; worker.kill()
                 break
             time.sleep(0.05)

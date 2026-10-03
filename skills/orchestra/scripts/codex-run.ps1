@@ -1,7 +1,7 @@
 param(
     [string]$Project = (Get-Location).Path, [string]$Prompt, [string]$PromptFile,
     [ValidateSet('medium', 'high')][string]$Effort = 'medium', [string]$Model = 'gpt-6.1-sol',
-    [ValidateRange(0.000001, [double]::MaxValue)][double]$TimeoutMin = 20,
+    [ValidateRange(0, [double]::MaxValue)][double]$TimeoutMin = 0,
     [string]$Resume, [switch]$ComputerUse
 )
 $ErrorActionPreference = 'Stop'
@@ -114,11 +114,12 @@ try {
     if ($PromptFile) { $Prompt = [IO.File]::ReadAllText((Resolve-Path -LiteralPath $PromptFile).ProviderPath, $utf8) }
     elseif (-not $PSBoundParameters.ContainsKey('Prompt')) { [Console]::InputEncoding = $utf8; $Prompt = [Console]::In.ReadToEnd() }
     $Prompt += "`nShell is Windows PowerShell 5.1: no ``&&`` or ``||``. Put scripts longer than 3 lines in a file and run the file. ``rg``/``findstr`` exit 1 means no match.`nKeep tool output small: read line ranges or filter; never print whole large files or logs.`nTouch only what the task needs. Do not run git commands that change history (commit, push, reset, rebase, checkout, stash, clean).`nNever add AI attribution anywhere.`nIf blocked, stop and say exactly what is missing.`nFinal message under 300 words: files changed, commands run with results, open risks."
-    $TimeoutMin = [Math]::Min(90.0, $TimeoutMin)
+    # TimeoutMin 0 (the default) means no timeout; a positive value is an opt-in deadline.
     if ($ComputerUse) {
         if (-not (Test-CodexDesktopRunning)) { throw 'BLOCKED: native CUA unavailable; Codex desktop app is not running.' }
         $mutex = New-Object Threading.Mutex($false, 'Global\orchestra-desktop')
-        try { $held = $mutex.WaitOne([int]($TimeoutMin * 60000)) } catch [Threading.AbandonedMutexException] { $held = $true }
+        $waitMs = -1; if ($TimeoutMin -gt 0) { $waitMs = [int][Math]::Min(2147483647.0, $TimeoutMin * 60000) }
+        try { $held = $mutex.WaitOne($waitMs) } catch [Threading.AbandonedMutexException] { $held = $true }
         if (-not $held) { throw 'Timed out waiting for native CUA desktop lock (another ComputerUse worker is running).' }
         $Prompt += "`nNative desktop control: use mcp__node_repl__js through functions.exec as tools.mcp__node_repl__js (discover that exact name in ALL_TOOLS if deferred). Import with const {sky} = await import('@oai/sky'); call sky.list_windows() first as native preflight. Never use browser-only cua_repl for desktop apps. If the tool, import, or native preflight fails, stop and write Status: BLOCKED with BLOCKED: native CUA unavailable in the report. Include the end-state screenshot path in the final message."
     }
@@ -146,7 +147,7 @@ try {
         if (-not $inputClosed -and $inputTask.IsCompleted) { $child.Input.Dispose(); $inputClosed = $true }
         $exited = $child.Process.WaitForExit(50)
         if ($exited -and $outTask.IsCompleted -and $errTask.IsCompleted) { break }
-        if ($timer.Elapsed.TotalMinutes -ge $TimeoutMin) {
+        if ($TimeoutMin -gt 0 -and $timer.Elapsed.TotalMinutes -ge $TimeoutMin) {
             $record.status = 'timeout'; $child.Kill()
             if (-not $child.Process.WaitForExit(5000)) { throw 'Worker did not exit after job termination.' }
             if (-not [Threading.Tasks.Task]::WaitAll([Threading.Tasks.Task[]]@($outTask, $errTask), 5000)) { throw 'Worker streams did not close after job termination.' }

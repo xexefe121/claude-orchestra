@@ -135,7 +135,7 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File "$env:USERPROFILE\.claud
 | `-PromptFile` | UTF-8 scratch prompt file, outside the project. |
 | `-Prompt` | Inline prompt; mutually exclusive with `-PromptFile`. Omit both to read stdin. |
 | `-Effort` | `medium` (default) or `high` for real logic. |
-| `-TimeoutMin` | Positive minutes; default 20, capped at 90. |
+| `-TimeoutMin` | Optional hard deadline in minutes. Default 0 means no timeout; there is no upper cap. |
 | `-Resume` | Existing thread ID; omit for a new task. Resume at most once for a large fix. |
 | `-ComputerUse` | Native desktop preflight and one-GUI-run lock; omit for code tasks. |
 | `-Model` | Model slug; default `gpt-6.1-sol`. |

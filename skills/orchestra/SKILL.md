@@ -29,12 +29,12 @@ Run this skill only when the user asked for it in this chat. A `.orchestra/` fol
 Runner: `~/.claude/skills/orchestra/scripts/codex-run.ps1` (Windows PowerShell 5.1).
 
 ```
-powershell -NoProfile -ExecutionPolicy Bypass -File "$env:USERPROFILE\.claude\skills\orchestra\scripts\codex-run.ps1" -Project <dir> -PromptFile <file> [-Effort medium|high] [-TimeoutMin 20] [-Resume <thread id>] [-ComputerUse] [-Model <slug>]
+powershell -NoProfile -ExecutionPolicy Bypass -File "$env:USERPROFILE\.claude\skills\orchestra\scripts\codex-run.ps1" -Project <dir> -PromptFile <file> [-Effort medium|high] [-TimeoutMin <n>] [-Resume <thread id>] [-ComputerUse] [-Model <slug>]
 ```
 
 - Always start it with `run_in_background: true`. Never poll, sleep, or tail logs; the completion notification is the signal.
 - Write the prompt to a scratch file (not into the project) and pass `-PromptFile`. Short prompts can use `-Prompt`.
-- Default effort is `medium`. Use `high` for real logic. Default timeout 20 minutes; raise it (max 90) only for known long jobs.
+- Default effort is `medium`. Use `high` for real logic. There is no timeout by default; runs go until the worker finishes. Pass `-TimeoutMin <n>` only when you want a hard deadline.
 - Output is at most 15 lines: `[codex-run] <id> <done|failed|timeout> thread=<id> <s>s in=<k>k cached=<pct>% out=<k>k`, then the worker's final message.
 - While sol runs, keep working: do the next inline item in other files, or dispatch a second sol run on a disjoint set of files. Two writers at most, never on the same files.
 - The runner forces the standard service tier, caps tool output, and adds the shell and git rules. Do not repeat those in the prompt.
